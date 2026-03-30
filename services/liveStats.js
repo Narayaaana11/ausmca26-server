@@ -5,6 +5,7 @@ const Event = require('../models/Event');
 
 const STATS_CHANNEL = 'live-stats:update';
 const STATS_INTERVAL_MS = 5000;
+const DEFAULT_SERVER_START = Date.now();
 
 function formatUptime(totalSeconds) {
   const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -96,4 +97,11 @@ function setupLiveStats(io) {
   };
 }
 
-module.exports = setupLiveStats;
+function getCurrentLiveStats() {
+  return buildLiveStats(DEFAULT_SERVER_START);
+}
+
+module.exports = {
+  setupLiveStats,
+  getCurrentLiveStats,
+};

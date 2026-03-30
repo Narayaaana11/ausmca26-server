@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 const fs = require('fs');
 const path = require('path');
 const connectDB = require('./config/db');
-const setupLiveStats = require('./services/liveStats');
+const { setupLiveStats, getCurrentLiveStats } = require('./services/liveStats');
 
 const app = express();
 const server = http.createServer(app);
@@ -84,8 +84,17 @@ app.get('/api', (req, res) => {
     success: true,
     message: 'Batch Memory API root',
     health: '/api/health',
-    routes: ['/api/memories', '/api/events', '/api/posts', '/api/members', '/api/images'],
+    routes: ['/api/live-stats', '/api/memories', '/api/events', '/api/posts', '/api/members', '/api/images'],
   });
+});
+
+app.get('/api/live-stats', async (req, res, next) => {
+  try {
+    const stats = await getCurrentLiveStats();
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Health check
