@@ -15,9 +15,11 @@ const server = http.createServer(app);
 connectDB();
 
 // Middleware
-const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || '')
+const normalizeOrigin = (value) => (value || '').trim().replace(/\/+$/, '').toLowerCase();
+
+const allowedOrigins = `${process.env.CLIENT_URLS || ''},${process.env.CLIENT_URL || ''}`
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
 
 const allowedOriginPatterns = (process.env.CLIENT_URL_PATTERNS || '')
@@ -25,9 +27,16 @@ const allowedOriginPatterns = (process.env.CLIENT_URL_PATTERNS || '')
   .map((pattern) => pattern.trim())
   .filter(Boolean)
   .map((pattern) => {
-    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-    return new RegExp(`^${escaped}$`);
+    const normalizedPattern = pattern.replace(/\/+$/, '');
+    const escaped = normalizedPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+    return new RegExp(`^${escaped}/?$`, 'i');
   });
+
+const defaultAllowedOriginPatterns = [
+  /^https:\/\/[a-z0-9.-]+\.vercel\.app$/i,
+  /^http:\/\/localhost(?::\d+)?$/i,
+  /^http:\/\/127\.0\.0\.1(?::\d+)?$/i,
+];
 
 const allowAllOrigins = allowedOrigins.length === 0;
 const corsOrigin = (origin, callback) => {
@@ -36,12 +45,19 @@ const corsOrigin = (origin, callback) => {
     return;
   }
 
-  if (allowAllOrigins || allowedOrigins.includes(origin)) {
+  const normalizedOrigin = normalizeOrigin(origin);
+
+  if (allowAllOrigins || allowedOrigins.includes(normalizedOrigin)) {
     callback(null, true);
     return;
   }
 
-  if (allowedOriginPatterns.some((regex) => regex.test(origin))) {
+  if (allowedOriginPatterns.some((regex) => regex.test(normalizedOrigin))) {
+    callback(null, true);
+    return;
+  }
+
+  if (defaultAllowedOriginPatterns.some((regex) => regex.test(normalizedOrigin))) {
     callback(null, true);
     return;
   }
