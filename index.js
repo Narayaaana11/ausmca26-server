@@ -39,8 +39,14 @@ const defaultAllowedOriginPatterns = [
 ];
 
 const allowAllOrigins = allowedOrigins.length === 0;
+const strictCors = process.env.CORS_STRICT === 'true';
 const corsOrigin = (origin, callback) => {
   if (!origin) {
+    callback(null, true);
+    return;
+  }
+
+  if (!strictCors) {
     callback(null, true);
     return;
   }
