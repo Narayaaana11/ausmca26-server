@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const memorySchema = new mongoose.Schema({
-  title: { type: String, required: [true, 'Title is required'], trim: true },
+  title: { type: String, default: '', trim: true },
   description: { type: String, default: '' },
   imageUrl: { type: String, required: true },
   thumbnailUrl: { type: String, default: '' },
