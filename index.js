@@ -20,6 +20,15 @@ const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const allowedOriginPatterns = (process.env.CLIENT_URL_PATTERNS || '')
+  .split(',')
+  .map((pattern) => pattern.trim())
+  .filter(Boolean)
+  .map((pattern) => {
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+    return new RegExp(`^${escaped}$`);
+  });
+
 const allowAllOrigins = allowedOrigins.length === 0;
 const corsOrigin = (origin, callback) => {
   if (!origin) {
@@ -32,10 +41,17 @@ const corsOrigin = (origin, callback) => {
     return;
   }
 
+  if (allowedOriginPatterns.some((regex) => regex.test(origin))) {
+    callback(null, true);
+    return;
+  }
+
   callback(new Error('CORS blocked for this origin'));
 };
 
-app.use(cors({ origin: corsOrigin, credentials: true }));
+const corsOptions = { origin: corsOrigin, credentials: true };
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
