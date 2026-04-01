@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --coverage --runInBand",
     "build:client": "npm --prefix ../client run build",
     "deploy:prepare": "npm run build:client"
   },
@@ -25,6 +27,8 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.1.0"
   }
 }

@@ -1,6 +1,8 @@
 const Post = require('../models/Post');
 const Image = require('../models/Image');
 const { uploadImage, removeImageAssets } = require('../services/storage.service');
+const { enqueueImageProcessing } = require('../services/imagePipeline.service');
+const { upsertSearchDocument } = require('../services/searchIndex.service');
 
 const getClientId = (req) => req.get('x-client-id')?.trim() || 'guest';
 
@@ -18,8 +20,28 @@ const normalizePost = (postDoc) => {
 
 exports.getPosts = async (req, res) => {
   try {
-    const posts = await Post.find().sort({ isPinned: -1, createdAt: -1 });
-    res.json({ success: true, count: posts.length, posts: posts.map(normalizePost) });
+    const { q = '', limit = 24, page = 1 } = req.query;
+    const filter = {};
+    if (q) filter.content = { $regex: q, $options: 'i' };
+
+    const safeLimit = Math.min(Math.max(Number(limit) || 24, 1), 100);
+    const safePage = Math.max(Number(page) || 1, 1);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [posts, total] = await Promise.all([
+      Post.find(filter).sort({ isPinned: -1, createdAt: -1 }).skip(skip).limit(safeLimit),
+      Post.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      count: posts.length,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      pages: Math.max(Math.ceil(total / safeLimit), 1),
+      posts: posts.map(normalizePost),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -47,7 +69,7 @@ exports.createPost = async (req, res) => {
     });
 
     if (storage) {
-      await Image.create({
+      const image = await Image.create({
         imageId: storage.cloudFileId,
         userId: getClientId(req),
         imageUrl: storage.imageUrl,
@@ -63,8 +85,21 @@ exports.createPost = async (req, res) => {
         originalSize: storage.originalSize,
         category: 'post',
         sourceRef: { kind: 'post', id: String(post._id) },
+        processingStatus: 'pending',
+        moderationStatus: 'pending',
       });
+
+      enqueueImageProcessing(image);
     }
+
+    await upsertSearchDocument({
+      entityId: String(post._id),
+      entityType: 'post',
+      title: post.authorName,
+      text: post.content,
+      keywords: [post.isAnonymous ? 'anonymous' : 'named'],
+      category: 'wall',
+    });
 
     res.status(201).json({ success: true, post: normalizePost(post) });
   } catch (err) {

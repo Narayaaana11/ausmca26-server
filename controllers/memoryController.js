@@ -1,18 +1,38 @@
 const Memory = require('../models/Memory');
 const Image = require('../models/Image');
 const { uploadImage, removeImageAssets } = require('../services/storage.service');
+const { enqueueImageProcessing } = require('../services/imagePipeline.service');
+const { upsertSearchDocument } = require('../services/searchIndex.service');
 
 const getClientId = (req) => req.get('x-client-id')?.trim() || 'guest';
 
 exports.getMemories = async (req, res) => {
   try {
-    const { year, event, tag } = req.query;
+    const { year, event, tag, limit = 24, page = 1, q = '' } = req.query;
     const filter = {};
     if (year) filter.year = year;
     if (event) filter.event = event;
     if (tag) filter.tags = tag;
-    const memories = await Memory.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: memories.length, memories });
+    if (q) filter.$or = [{ title: { $regex: q, $options: 'i' } }, { description: { $regex: q, $options: 'i' } }];
+
+    const safeLimit = Math.min(Math.max(Number(limit) || 24, 1), 100);
+    const safePage = Math.max(Number(page) || 1, 1);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [memories, total] = await Promise.all([
+      Memory.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit),
+      Memory.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      count: memories.length,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      pages: Math.max(Math.ceil(total / safeLimit), 1),
+      memories,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -34,7 +54,7 @@ exports.createMemory = async (req, res) => {
       uploadedByName: uploadedByName?.trim() || 'Batch Member',
     });
 
-    await Image.create({
+    const image = await Image.create({
       imageId: storage.cloudFileId,
       userId: getClientId(req),
       imageUrl: storage.imageUrl,
@@ -50,6 +70,19 @@ exports.createMemory = async (req, res) => {
       originalSize: storage.originalSize,
       category: 'memory',
       sourceRef: { kind: 'memory', id: String(memory._id) },
+      processingStatus: 'pending',
+      moderationStatus: 'pending',
+    });
+
+    enqueueImageProcessing(image);
+    await upsertSearchDocument({
+      entityId: String(memory._id),
+      entityType: 'memory',
+      title: memory.title,
+      text: memory.description,
+      keywords: memory.tags || [],
+      category: memory.event || 'General',
+      year: memory.year || '',
     });
 
     res.status(201).json({ success: true, memory });

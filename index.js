@@ -83,6 +83,7 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api/members', require('./routes/members'));
 app.use('/api/images', require('./routes/images'));
+app.use('/api/search', require('./routes/search'));
 
 // Base routes
 const shouldServeClient = process.env.SERVE_CLIENT === 'true' || process.env.NODE_ENV === 'production';
@@ -106,7 +107,7 @@ app.get('/api', (req, res) => {
     success: true,
     message: 'Batch Memory API root',
     health: '/api/health',
-    routes: ['/api/live-stats', '/api/memories', '/api/events', '/api/posts', '/api/members', '/api/images'],
+    routes: ['/api/live-stats', '/api/memories', '/api/events', '/api/posts', '/api/members', '/api/images', '/api/search'],
   });
 });
 
